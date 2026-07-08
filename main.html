@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <h1>Camera Recorder with Filters</h1>
+
+    <div id="app">
+        <div class="preview">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" hidden></canvas>
+        </div>
+
+        <div class="controls">
+            <label for="filter">Filter:</label>
+            <select id="filter">
+                <option value="none">None</option>
+                <option value="grayscale(100%)">Grayscale</option>
+                <option value="sepia(100%)">Sepia</option>
+                <option value="invert(100%)">Invert</option>
+                <option value="contrast(150%)">High Contrast</option>
+                <option value="blur(3px)">Blur</option>
+                <option value="saturate(200%)">Saturate</option>
+            </select>
+
+            <button id="startRec">Start Recording</button>
+            <button id="stopRec" disabled>Stop</button>
+            <button id="snap">Snapshot</button>
+            <a id="downloadLink" style="display:none">Download</a>
+            <div id="timer">00:00</div>
+        </div>
+    </div>
+
+    <style>
+        body{font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px}
+        .preview{width:640px;max-width:100%;position:relative}
+        video, canvas{width:100%;background:#000;border-radius:6px}
+        .controls{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        #timer{min-width:50px;text-align:center;font-weight:bold}
+    </style>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const filterSelect = document.getElementById('filter');
+        const startBtn = document.getElementById('startRec');
+        const stopBtn = document.getElementById('stopRec');
+        const snapBtn = document.getElementById('snap');
+        const downloadLink = document.getElementById('downloadLink');
+        const timerEl = document.getElementById('timer');
+
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordStart = 0;
+        let timerInterval = null;
+
+        async function init() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+                video.srcObject = mediaStream;
+            } catch(e){
+                alert('Camera access required: '+e.message);
+            }
+        }
+
+        filterSelect.addEventListener('change', ()=>{
+            video.style.filter = filterSelect.value;
+        });
+
+        snapBtn.addEventListener('click', ()=>{
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            // apply CSS filter to canvas drawing
+            ctx.filter = filterSelect.value;
+            ctx.drawImage(video,0,0,w,h);
+            const data = canvas.toDataURL('image/png');
+            downloadLink.href = data;
+            downloadLink.download = 'snapshot.png';
+            downloadLink.style.display = 'inline';
+            downloadLink.textContent = 'Download Snapshot';
+        });
+
+        function startTimer(){
+            recordStart = Date.now();
+            timerInterval = setInterval(()=>{
+                const diff = Date.now()-recordStart;
+                const s = Math.floor(diff/1000)%60;
+                const m = Math.floor(diff/60000);
+                timerEl.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+            },250);
+        }
+
+        function stopTimer(){ clearInterval(timerInterval); timerEl.textContent='00:00'; }
+
+        startBtn.addEventListener('click', ()=>{
+            if(!mediaStream) return;
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(mediaStream, {mimeType: 'video/webm;codecs=vp9'});
+            mediaRecorder.ondataavailable = e=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = ()=>{
+                const blob = new Blob(recordedChunks, {type:'video/webm'});
+                const url = URL.createObjectURL(blob);
+                downloadLink.href = url;
+                downloadLink.download = 'recording.webm';
+                downloadLink.style.display = 'inline';
+                downloadLink.textContent = 'Download Recording';
+            };
+            mediaRecorder.start();
+            startBtn.disabled = true; stopBtn.disabled = false;
+            startTimer();
+        });
+
+        stopBtn.addEventListener('click', ()=>{
+            if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+            startBtn.disabled = false; stopBtn.disabled = true;
+            stopTimer();
+        });
+
+        // initialize on page load
+        init();
+    </script>
+</head>
+<body>
+    <h1>Site Under Construction</h1>
+    <p>We are currently working on this site. There may be some issues or missing features.</p>
+</body>
+</html>
